@@ -4,7 +4,9 @@
   "type": "module",
   "description": "MyST directive that renders an interactive form from a JSON Schema using JSONForms.",
   "scripts": {
-    "build": "esbuild src/widget.js --bundle --format=esm --outfile=dist/widget.mjs --define:process.env.NODE_ENV='\"production\"'",
+    "build": "bun run build:widget && bun run build:plugin",
+    "build:widget": "esbuild src/widget.js --bundle --format=esm --outfile=dist/widget.mjs --define:process.env.NODE_ENV='\"production\"'",
+    "build:plugin": "esbuild src/jsonform.mjs --bundle --format=esm --platform=node --outfile=dist/jsonform.mjs",
     "watch": "esbuild src/widget.js --bundle --format=esm --outfile=dist/widget.mjs --define:process.env.NODE_ENV='\"production\"' --watch"
   },
   "devDependencies": {
