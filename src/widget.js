@@ -20,7 +20,7 @@ import { vanillaRenderers, vanillaCells } from '@jsonforms/vanilla-renderers';
  * affected by the host theme's styles.
  */
 const STYLE = `
-.myst-jsonform { max-width: 32rem; font-size: 0.95rem; }
+.myst-jsonform { max-width: 32rem; font-size: 0.95rem; margin-bottom: 1.75rem; }
 .myst-jsonform .vertical-layout { display: flex; flex-direction: column; gap: 0.85rem; }
 .myst-jsonform .control { display: flex; flex-direction: column; gap: 0.25rem; }
 .myst-jsonform .control > label { font-weight: 600; }
@@ -52,6 +52,60 @@ const STYLE = `
 .myst-jsonform .control.validation_error input,
 .myst-jsonform .control.validation_error select,
 .myst-jsonform .control.validation_error textarea { border-color: #d6336c; }
+
+/* Array controls (lists of objects / enum checkboxes) */
+.myst-jsonform button {
+  padding: 0.3rem 0.75rem;
+  border: 1px solid #c9ced6;
+  border-radius: 5px;
+  background: #f4f6f9;
+  color: #111;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.myst-jsonform button:hover { background: #e7ebf1; }
+.myst-jsonform .array-table-layout > header,
+.myst-jsonform .array-control-layout > header,
+.myst-jsonform .array-layout > legend {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 0.65rem 0;
+  padding: 0;
+}
+.myst-jsonform .array-table-layout header label,
+.myst-jsonform .array-control-layout header label,
+.myst-jsonform .array-layout > legend > label {
+  flex: 1;
+  font-weight: 600;
+  margin: 0;
+}
+.myst-jsonform .array-layout,
+.myst-jsonform .group-layout {
+  border: 1px solid #e1e6ec;
+  border-radius: 6px;
+  padding: 0.85rem;
+  margin: 0.25rem 0;
+}
+.myst-jsonform .group-layout > legend { font-weight: 600; padding: 0 0.35rem; }
+.myst-jsonform .array-table-layout table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.25rem;
+}
+.myst-jsonform .array-table-layout th {
+  text-align: left;
+  font-size: 0.8rem;
+  color: #4b5563;
+  font-weight: 600;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #e1e6ec;
+}
+.myst-jsonform .array-table-layout td {
+  padding: 0.4rem 0.5rem;
+  vertical-align: top;
+}
 .myst-jsonform-actions { margin-top: 1rem; display: flex; align-items: center; gap: 0.75rem; }
 .myst-jsonform-submit {
   padding: 0.5rem 1.2rem;
