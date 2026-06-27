@@ -2238,10 +2238,16 @@ function extractParts(parsed) {
     return {
       schema: parsed[byNorm.schema] ?? {},
       uischema: byNorm.uischema ? parsed[byNorm.uischema] : void 0,
-      data: byNorm.data ? parsed[byNorm.data] : void 0
+      data: byNorm.data ? parsed[byNorm.data] : void 0,
+      style: byNorm.style ? parsed[byNorm.style] : void 0
     };
   }
-  return { schema: parsed, uischema: void 0, data: void 0 };
+  return { schema: parsed, uischema: void 0, data: void 0, style: void 0 };
+}
+function isCssReference(value) {
+  const v = value.trim();
+  if (v.includes("\n") || v.includes("{")) return false;
+  return /^https?:\/\//i.test(v) || /\.css$/i.test(v);
 }
 var jsonformDirective = {
   name: "jsonform",
@@ -2259,16 +2265,24 @@ var jsonformDirective = {
       vfile.message("jsonform: body must define a JSON Schema object");
       parsed = {};
     }
-    const { schema, uischema, data: formData } = extractParts(parsed);
+    const { schema, uischema, data: formData, style } = extractParts(parsed);
     if (!schema || typeof schema !== "object") {
       vfile.message("jsonform: Schema must be a JSON Schema object");
     }
-    return [{
+    const node = {
       type: "anywidget",
       esm: widgetRef(vfile.path),
       model: { schema: schema ?? {}, uischema, data: formData },
       id: randomUUID()
-    }];
+    };
+    if (typeof style === "string" && style.trim()) {
+      if (isCssReference(style)) {
+        node.css = style.trim();
+      } else {
+        node.model.style = style;
+      }
+    }
+    return [node];
   }
 };
 var jsonform_default = {
