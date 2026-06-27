@@ -2229,26 +2229,44 @@ function widgetRef(vfilePath) {
   }
   return WIDGET_URL;
 }
+function extractParts(parsed) {
+  const byNorm = {};
+  for (const key of Object.keys(parsed)) {
+    byNorm[key.toLowerCase().replace(/[\s_]+/g, "")] = key;
+  }
+  if (byNorm.schema) {
+    return {
+      schema: parsed[byNorm.schema] ?? {},
+      uischema: byNorm.uischema ? parsed[byNorm.uischema] : void 0,
+      data: byNorm.data ? parsed[byNorm.data] : void 0
+    };
+  }
+  return { schema: parsed, uischema: void 0, data: void 0 };
+}
 var jsonformDirective = {
   name: "jsonform",
-  doc: "Render an interactive form from a JSON Schema.",
-  body: { type: String, required: true, doc: "JSON Schema for the form (YAML or JSON)." },
+  doc: "Render an interactive form from a JSON Schema (optionally with UI Schema and Data).",
+  body: { type: String, required: true, doc: "JSON Schema, or a Schema/UISchema/Data wrapper (YAML or JSON)." },
   run(data, vfile) {
-    let schema;
+    let parsed;
     try {
-      schema = load(data.body);
+      parsed = load(data.body);
     } catch (err) {
       vfile.message(`jsonform: body must be valid YAML or JSON (${err.message})`);
-      schema = {};
+      parsed = {};
     }
-    if (!schema || typeof schema !== "object") {
+    if (!parsed || typeof parsed !== "object") {
       vfile.message("jsonform: body must define a JSON Schema object");
-      schema = {};
+      parsed = {};
+    }
+    const { schema, uischema, data: formData } = extractParts(parsed);
+    if (!schema || typeof schema !== "object") {
+      vfile.message("jsonform: Schema must be a JSON Schema object");
     }
     return [{
       type: "anywidget",
       esm: widgetRef(vfile.path),
-      model: { schema },
+      model: { schema: schema ?? {}, uischema, data: formData },
       id: randomUUID()
     }];
   }

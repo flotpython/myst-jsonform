@@ -23651,6 +23651,8 @@ var vanillaCells = [
 var STYLE = `
 .myst-jsonform { max-width: 32rem; font-size: 0.95rem; margin-bottom: 1.75rem; }
 .myst-jsonform .vertical-layout { display: flex; flex-direction: column; gap: 0.85rem; }
+.myst-jsonform .horizontal-layout { display: flex; flex-direction: row; gap: 0.85rem; align-items: flex-start; }
+.myst-jsonform .horizontal-layout > * { flex: 1; }
 .myst-jsonform .control { display: flex; flex-direction: column; gap: 0.25rem; }
 .myst-jsonform .control > label { font-weight: 600; }
 .myst-jsonform .control .input,
@@ -23759,8 +23761,8 @@ var STYLE = `
   overflow-x: auto;
 }
 `;
-function JsonFormWidget({ schema }) {
-  const [data, setData] = React3.useState({});
+function JsonFormWidget({ schema, uischema, initialData }) {
+  const [data, setData] = React3.useState(initialData ?? {});
   const [errors, setErrors] = React3.useState([]);
   const [submitted, setSubmitted] = React3.useState(null);
   const isValid = errors.length === 0;
@@ -23770,6 +23772,8 @@ function JsonFormWidget({ schema }) {
     React3.createElement("style", null, STYLE),
     React3.createElement(JsonForms, {
       schema,
+      // undefined uischema => JSONForms auto-generates a layout from the schema
+      uischema,
       data,
       renderers: vanillaRenderers,
       cells: vanillaCells,
@@ -23805,9 +23809,15 @@ function JsonFormWidget({ schema }) {
   );
 }
 function render({ model, el }) {
-  const schema = typeof model.get === "function" ? model.get("schema") : model.schema;
+  const get2 = (k) => typeof model.get === "function" ? model.get(k) : model[k];
   const root = (0, import_client.createRoot)(el);
-  root.render(React3.createElement(JsonFormWidget, { schema }));
+  root.render(
+    React3.createElement(JsonFormWidget, {
+      schema: get2("schema"),
+      uischema: get2("uischema"),
+      initialData: get2("data")
+    })
+  );
   return () => root.unmount();
 }
 var widget_default = { render };
