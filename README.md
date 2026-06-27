@@ -4,7 +4,7 @@ A [MyST](https://mystmd.org) plugin providing a `{jsonform}` directive that
 renders an interactive form from a [JSON Schema](https://json-schema.org), using
 [JSONForms](https://jsonforms.io).
 
-## Usage
+## Install
 
 Add the plugin to your `myst.yml`:
 
@@ -14,8 +14,14 @@ project:
     - https://cdn.jsdelivr.net/gh/flotpython/myst-jsonform@main/dist/jsonform.mjs
 ```
 
-Then use the directive. The body specifies your form schema, and can be written in either **YAML or JSON**
-(YAML is a superset of JSON, so both work):
+## The directive body: two modes
+
+The body can be written in **YAML or JSON** (YAML is a superset of JSON, so both
+work), in one of two modes.
+
+### Mode 1 — a bare JSON Schema
+
+The whole body *is* the JSON Schema. JSONForms auto-generates the layout.
 
 ````markdown
 ```{jsonform}
@@ -31,26 +37,142 @@ properties:
 ```
 ````
 
-Supported out of the box: 
-- strings (with `format` for `email`, `uri`, `date`,
-`date-time`, `time`), 
-- integers/numbers (with `minimum`/`maximum`), booleans
-(checkboxes), 
-- `enum` (dropdowns), arrays of `enum` (multi-select checkboxes),
-- arrays of objects (add/remove tables),
-- and `required` + validation.
+### Mode 2 — a folded form with named chunks
 
-**Not supported:** as of this preliminary version:
-- nested `object` properties. With a schema-only directive (no UI schema), JSONForms' 
-  auto-generated layout does not expand nested objects into sub-forms.
+If the body has a top-level `Schema:` key, it is read as a set of named chunks.
+This unlocks a custom layout, initial data, and styling. Two families of keys:
+
+**JSONForms-native** — these mirror the three tabs on the
+[jsonforms.io](https://jsonforms.io) examples:
+
+| key        | required | meaning |
+|------------|----------|---------|
+| `Schema`   | yes      | the JSON Schema |
+| `UISchema` | no       | the [UI Schema](https://jsonforms.io/docs/uischema/) (layout); auto-generated if omitted |
+| `Data`     | no       | initial form data |
+
+**Plugin extras** — processed by this plugin, not part of JSONForms:
+
+| key     | meaning |
+|---------|---------|
+| `Style` | per-form CSS — inline rules, or a path/URL to a `.css` file (see [Styling](#styling)) |
+
+Key names are matched case-insensitively and ignoring spaces/underscores, so
+`UISchema`, `UI Schema` and `ui_schema` are equivalent.
+
+````markdown
+```{jsonform}
+Schema:
+  type: object
+  properties:
+    firstName: {type: string, title: First name}
+    lastName:  {type: string, title: Last name}
+UISchema:
+  type: HorizontalLayout
+  elements:
+    - {type: Control, scope: "#/properties/firstName"}
+    - {type: Control, scope: "#/properties/lastName"}
+Data:
+  firstName: Ada
+```
+````
+
+## What's supported
+
+From a bare schema, JSONForms renders:
+
+- strings (with `format` for `email`, `uri`, `date`, `date-time`, `time`)
+- integers / numbers (with `minimum` / `maximum`)
+- booleans (checkboxes)
+- `enum` (dropdowns), and arrays of `enum` (multi-select checkboxes)
+- arrays of objects (add/remove tables)
+- `required` fields and live validation (the Submit button stays disabled until
+  the form is valid)
+
+### Nested objects
+
+A **bare schema** does *not* expand nested `object` properties — JSONForms'
+auto-generated layout only renders the top-level fields. To render nested
+objects, use Mode 2 and provide a `UISchema` whose controls point at the nested
+scopes (typically inside a `Group`):
+
+````markdown
+```{jsonform}
+Schema:
+  type: object
+  properties:
+    name: {type: string, title: Name}
+    address:
+      type: object
+      properties:
+        street: {type: string, title: Street}
+        city:   {type: string, title: City}
+UISchema:
+  type: VerticalLayout
+  elements:
+    - {type: Control, scope: "#/properties/name"}
+    - type: Group
+      label: Address
+      elements:
+        - {type: Control, scope: "#/properties/address/properties/street"}
+        - {type: Control, scope: "#/properties/address/properties/city"}
+```
+````
+
+## Styling
+
+The form renders inside an open shadow root, so it is style-isolated from the
+page. There are three ways to customise it:
+
+1. **Theme variables (site-wide).** The base stylesheet exposes CSS custom
+   properties — `--jsonform-accent`, `--jsonform-accent-hover`,
+   `--jsonform-border`, `--jsonform-radius`, `--jsonform-muted`,
+   `--jsonform-error`, `--jsonform-gap`, `--jsonform-max-width`, … Because
+   inherited properties cross the shadow boundary, you can override them with
+   ordinary site CSS:
+
+   ```css
+   :root { --jsonform-accent: #2e7d32; --jsonform-radius: 10px; }
+   ```
+
+2. **Inline CSS (per form).** A `Style:` chunk with verbatim rules, injected
+   into that form only:
+
+   ````markdown
+   ```{jsonform}
+   Schema:
+     type: object
+     properties: {name: {type: string, title: Name}}
+   Style: |
+     .control > label { color: rebeccapurple; }
+     .control input { border: 2px solid rebeccapurple; }
+   ```
+   ````
+
+3. **External stylesheet (per form).** A `Style:` value that is a path or URL
+   ending in `.css` is treated as a reference; mystmd stages the file and links
+   it inside the form's shadow root:
+
+   ```yaml
+   Style: _static/style_forms.css
+   ```
+
+## More examples
+
+A page exercising the directive (types, layouts, styling) is published at:
+
+- <https://jupyterlab-examples.info-mines.paris/jsonforms-nb/>
+
+and its source is:
+
+- <https://raw.githubusercontent.com/flotpython/jupyterlab-examples/refs/heads/main/notebooks/3-11-jsonforms-nb.md>
 
 ## How it works
 
 The directive emits an [anywidget](https://anywidget.dev) node. The browser-side
-widget (`dist/widget.mjs`) is a self-contained bundle of React + JSONForms
-
-This is important so there is exactly one copy of React and of `@jsonforms/core`.
-The plugin itself (`dist/jsonform.mjs`) is bundled too (with
+widget (`dist/widget.mjs`) is a self-contained bundle of React + JSONForms, so
+there is exactly one copy of React and of `@jsonforms/core` — no CDN resolution
+at view time. The plugin itself (`dist/jsonform.mjs`) is bundled too (with
 `js-yaml` inlined) so it can be loaded directly from a URL.
 
 ## Development
@@ -84,21 +206,14 @@ git commit -m "rebuild"
 git push
 ```
 
-## Unversioned for now; but about versioning
-
-jsDelivr serves `@main` with a cache of up to ~12 h. 
-
-In the future we may move to a pinned versioning scheme; 
+jsDelivr serves `@main` with a cache of up to ~12 h. For reproducible, instantly
+pinned releases, tag a version and have users reference it instead of `@main`
+(and bump the `WIDGET_URL` tag in `src/jsonform.mjs` to match):
 
 ```bash
 git tag v0.1.0 && git push --tags
 ```
 
-For that we'd need to have users reference the tag instead of `@main`:
-
 ```yaml
-- https://cdn.jsdelivr.net/gh/flotpython/myst-jsonform@v0.1.0/dist/jsonform.mjs
+    - https://cdn.jsdelivr.net/gh/flotpython/myst-jsonform@v0.1.0/dist/jsonform.mjs
 ```
-
-In that case there would also be a need to have `WIDGET_URL` in
-`src/jsonform.mjs` follow up on the new tag, so the plugin pulls the matching widget bundle.
