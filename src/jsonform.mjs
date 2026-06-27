@@ -38,28 +38,59 @@ function widgetRef(vfilePath) {
   return WIDGET_URL;
 }
 
+/**
+ * The directive body is one of:
+ *   1. a bare JSON Schema, e.g.   `type: object` / `properties: ...`
+ *   2. a wrapper with up to three named chunks, mirroring the JSONForms tabs:
+ *        Schema:   ...   (required)
+ *        UISchema: ...   (optional — auto-generated if omitted)
+ *        Data:     ...   (optional — initial form data)
+ *
+ * Wrapper mode is detected by the presence of a top-level `Schema` key; a bare
+ * JSON Schema never has one. Key names are matched case-insensitively and
+ * ignoring spaces/underscores, so `UISchema`, `UI Schema`, `ui_schema` all work.
+ */
+function extractParts(parsed) {
+  const byNorm = {};
+  for (const key of Object.keys(parsed)) {
+    byNorm[key.toLowerCase().replace(/[\s_]+/g, '')] = key;
+  }
+  if (byNorm.schema) {
+    return {
+      schema: parsed[byNorm.schema] ?? {},
+      uischema: byNorm.uischema ? parsed[byNorm.uischema] : undefined,
+      data: byNorm.data ? parsed[byNorm.data] : undefined,
+    };
+  }
+  return { schema: parsed, uischema: undefined, data: undefined };
+}
+
 const jsonformDirective = {
   name: 'jsonform',
-  doc: 'Render an interactive form from a JSON Schema.',
-  body: { type: String, required: true, doc: 'JSON Schema for the form (YAML or JSON).' },
+  doc: 'Render an interactive form from a JSON Schema (optionally with UI Schema and Data).',
+  body: { type: String, required: true, doc: 'JSON Schema, or a Schema/UISchema/Data wrapper (YAML or JSON).' },
   run(data, vfile) {
-    let schema;
+    let parsed;
     try {
       // js-yaml parses YAML; since YAML is a superset of JSON, this also
       // accepts a plain JSON body.
-      schema = loadYaml(data.body);
+      parsed = loadYaml(data.body);
     } catch (err) {
       vfile.message(`jsonform: body must be valid YAML or JSON (${err.message})`);
-      schema = {};
+      parsed = {};
     }
-    if (!schema || typeof schema !== 'object') {
+    if (!parsed || typeof parsed !== 'object') {
       vfile.message('jsonform: body must define a JSON Schema object');
-      schema = {};
+      parsed = {};
+    }
+    const { schema, uischema, data: formData } = extractParts(parsed);
+    if (!schema || typeof schema !== 'object') {
+      vfile.message('jsonform: Schema must be a JSON Schema object');
     }
     return [{
       type: 'anywidget',
       esm: widgetRef(vfile.path),
-      model: { schema },
+      model: { schema: schema ?? {}, uischema, data: formData },
       id: randomUUID(),
     }];
   },
