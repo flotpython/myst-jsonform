@@ -60,9 +60,22 @@ function extractParts(parsed) {
       schema: parsed[byNorm.schema] ?? {},
       uischema: byNorm.uischema ? parsed[byNorm.uischema] : undefined,
       data: byNorm.data ? parsed[byNorm.data] : undefined,
+      style: byNorm.style ? parsed[byNorm.style] : undefined,
     };
   }
-  return { schema: parsed, uischema: undefined, data: undefined };
+  return { schema: parsed, uischema: undefined, data: undefined, style: undefined };
+}
+
+/**
+ * A `Style:` value is either a *reference* to a stylesheet (a single-line URL or
+ * a path ending in .css) or *inline CSS text*. References go through the
+ * anywidget `css` field (staged/downloaded by mystmd, linked into the shadow
+ * root by the theme); inline text is injected by the widget as a <style>.
+ */
+function isCssReference(value) {
+  const v = value.trim();
+  if (v.includes('\n') || v.includes('{')) return false;
+  return /^https?:\/\//i.test(v) || /\.css$/i.test(v);
 }
 
 const jsonformDirective = {
@@ -83,16 +96,24 @@ const jsonformDirective = {
       vfile.message('jsonform: body must define a JSON Schema object');
       parsed = {};
     }
-    const { schema, uischema, data: formData } = extractParts(parsed);
+    const { schema, uischema, data: formData, style } = extractParts(parsed);
     if (!schema || typeof schema !== 'object') {
       vfile.message('jsonform: Schema must be a JSON Schema object');
     }
-    return [{
+    const node = {
       type: 'anywidget',
       esm: widgetRef(vfile.path),
       model: { schema: schema ?? {}, uischema, data: formData },
       id: randomUUID(),
-    }];
+    };
+    if (typeof style === 'string' && style.trim()) {
+      if (isCssReference(style)) {
+        node.css = style.trim(); // file/URL -> staged & linked into the shadow root
+      } else {
+        node.model.style = style; // inline CSS -> injected by the widget
+      }
+    }
+    return [node];
   },
 };
 

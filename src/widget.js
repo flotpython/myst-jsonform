@@ -13,118 +13,122 @@ import { JsonForms } from '@jsonforms/react';
 import { vanillaRenderers, vanillaCells } from '@jsonforms/vanilla-renderers';
 
 /**
- * Compact stylesheet for @jsonforms/vanilla-renderers, which ships no CSS of
- * its own. It targets the class names those renderers emit (.vertical-layout,
- * .control, .input, .validation, ...). Injected into the widget's shadow root,
- * so it is automatically scoped — it neither leaks onto the page nor is
- * affected by the host theme's styles.
+ * Base stylesheet for @jsonforms/vanilla-renderers, which ships no CSS of its
+ * own. It targets the class names those renderers emit (.vertical-layout,
+ * .control, .input, ...). Injected into the widget's shadow root, so it is
+ * automatically scoped — selectors need no wrapper prefix, and the rules
+ * neither leak onto the page nor are affected by the host theme.
+ *
+ * Theming knobs are exposed as CSS custom properties: because inherited
+ * properties cross the shadow boundary, a page can override them with ordinary
+ * site CSS, e.g.  :root { --jsonform-accent: #c0392b }
  */
 const STYLE = `
-.myst-jsonform { max-width: 32rem; font-size: 0.95rem; margin-bottom: 1.75rem; }
-.myst-jsonform .vertical-layout { display: flex; flex-direction: column; gap: 0.85rem; }
-.myst-jsonform .horizontal-layout { display: flex; flex-direction: row; gap: 0.85rem; align-items: flex-start; }
-.myst-jsonform .horizontal-layout > * { flex: 1; }
-.myst-jsonform .control { display: flex; flex-direction: column; gap: 0.25rem; }
-.myst-jsonform .control > label { font-weight: 600; }
-.myst-jsonform .control .input,
-.myst-jsonform .control input,
-.myst-jsonform .control select,
-.myst-jsonform .control textarea {
+.myst-jsonform {
+  max-width: var(--jsonform-max-width, 32rem);
+  font-size: var(--jsonform-font-size, 0.95rem);
+  font-family: var(--jsonform-font-family, inherit);
+  color: var(--jsonform-fg, #111);
+  margin-bottom: 1.75rem;
+}
+.vertical-layout { display: flex; flex-direction: column; gap: var(--jsonform-gap, 0.85rem); }
+.horizontal-layout { display: flex; flex-direction: row; gap: var(--jsonform-gap, 0.85rem); align-items: flex-start; }
+.horizontal-layout > * { flex: 1; }
+.control { display: flex; flex-direction: column; gap: 0.25rem; }
+.control > label { font-weight: var(--jsonform-label-weight, 600); }
+.control .input,
+.control input,
+.control select,
+.control textarea {
   padding: 0.45rem 0.55rem;
-  border: 1px solid #c9ced6;
-  border-radius: 5px;
+  border: 1px solid var(--jsonform-border, #c9ced6);
+  border-radius: var(--jsonform-radius, 5px);
   font: inherit;
-  background: #fff;
-  color: #111;
+  background: var(--jsonform-input-bg, #fff);
+  color: var(--jsonform-fg, #111);
   width: 100%;
   box-sizing: border-box;
 }
-.myst-jsonform .control input[type="checkbox"] { width: auto; }
-.myst-jsonform .control .input:focus,
-.myst-jsonform .control input:focus,
-.myst-jsonform .control select:focus,
-.myst-jsonform .control textarea:focus {
+.control input[type="checkbox"] { width: auto; }
+.control .input:focus,
+.control input:focus,
+.control select:focus,
+.control textarea:focus {
   outline: none;
-  border-color: #4a90e2;
-  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.25);
+  border-color: var(--jsonform-accent, #4a90e2);
+  box-shadow: 0 0 0 2px var(--jsonform-focus-ring, rgba(74, 144, 226, 0.25));
 }
-.myst-jsonform .control > .input-description { font-size: 0.8rem; color: #6b7280; }
-.myst-jsonform .control > .validation { font-size: 0.8rem; color: #d6336c; }
-.myst-jsonform .control.validation_error .input,
-.myst-jsonform .control.validation_error input,
-.myst-jsonform .control.validation_error select,
-.myst-jsonform .control.validation_error textarea { border-color: #d6336c; }
+.control > .input-description { font-size: 0.8rem; color: var(--jsonform-muted, #6b7280); }
+.control > .validation { font-size: 0.8rem; color: var(--jsonform-error, #d6336c); }
+.control.validation_error .input,
+.control.validation_error input,
+.control.validation_error select,
+.control.validation_error textarea { border-color: var(--jsonform-error, #d6336c); }
 
 /* Array controls (lists of objects / enum checkboxes) */
-.myst-jsonform button {
+button {
   padding: 0.3rem 0.75rem;
-  border: 1px solid #c9ced6;
-  border-radius: 5px;
-  background: #f4f6f9;
-  color: #111;
+  border: 1px solid var(--jsonform-border, #c9ced6);
+  border-radius: var(--jsonform-radius, 5px);
+  background: var(--jsonform-modest-bg, #f4f6f9);
+  color: var(--jsonform-fg, #111);
   font: inherit;
   font-size: 0.85rem;
   cursor: pointer;
 }
-.myst-jsonform button:hover { background: #e7ebf1; }
-.myst-jsonform .array-table-layout > header,
-.myst-jsonform .array-control-layout > header,
-.myst-jsonform .array-layout > legend {
+button:hover { background: var(--jsonform-modest-bg-hover, #e7ebf1); }
+.array-table-layout > header,
+.array-control-layout > header,
+.array-layout > legend {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   margin: 0 0 0.65rem 0;
   padding: 0;
 }
-.myst-jsonform .array-table-layout header label,
-.myst-jsonform .array-control-layout header label,
-.myst-jsonform .array-layout > legend > label {
+.array-table-layout header label,
+.array-control-layout header label,
+.array-layout > legend > label {
   flex: 1;
-  font-weight: 600;
+  font-weight: var(--jsonform-label-weight, 600);
   margin: 0;
 }
-.myst-jsonform .array-layout,
-.myst-jsonform .group-layout {
-  border: 1px solid #e1e6ec;
+.array-layout,
+.group-layout {
+  border: 1px solid var(--jsonform-border, #c9ced6);
   border-radius: 6px;
   padding: 0.85rem;
   margin: 0.25rem 0;
 }
-.myst-jsonform .group-layout > legend { font-weight: 600; padding: 0 0.35rem; }
-.myst-jsonform .array-table-layout table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 0.25rem;
-}
-.myst-jsonform .array-table-layout th {
+.group-layout > legend { font-weight: var(--jsonform-label-weight, 600); padding: 0 0.35rem; }
+.array-table-layout table { width: 100%; border-collapse: collapse; margin-top: 0.25rem; }
+.array-table-layout th {
   text-align: left;
   font-size: 0.8rem;
-  color: #4b5563;
+  color: var(--jsonform-muted, #6b7280);
   font-weight: 600;
   padding: 0.35rem 0.5rem;
-  border-bottom: 1px solid #e1e6ec;
+  border-bottom: 1px solid var(--jsonform-border, #c9ced6);
 }
-.myst-jsonform .array-table-layout td {
-  padding: 0.4rem 0.5rem;
-  vertical-align: top;
-}
+.array-table-layout td { padding: 0.4rem 0.5rem; vertical-align: top; }
+
 .myst-jsonform-actions { margin-top: 1rem; display: flex; align-items: center; gap: 0.75rem; }
 .myst-jsonform-submit {
   padding: 0.5rem 1.2rem;
-  background: #4a90e2;
-  color: #fff;
+  background: var(--jsonform-accent, #4a90e2);
+  color: var(--jsonform-accent-fg, #fff);
   border: none;
-  border-radius: 5px;
+  border-radius: var(--jsonform-radius, 5px);
   font: inherit;
   cursor: pointer;
 }
-.myst-jsonform-submit:hover { background: #3b7dd0; }
+.myst-jsonform-submit:hover { background: var(--jsonform-accent-hover, #3b7dd0); }
 .myst-jsonform-submit:disabled { background: #b9c4d2; cursor: not-allowed; }
-.myst-jsonform-invalid { font-size: 0.85rem; color: #d6336c; }
+.myst-jsonform-invalid { font-size: 0.85rem; color: var(--jsonform-error, #d6336c); }
 .myst-jsonform-result {
   margin-top: 0.85rem;
   padding: 0.7rem 0.85rem;
-  background: #f4f6f9;
+  background: var(--jsonform-modest-bg, #f4f6f9);
   border: 1px solid #e1e6ec;
   border-radius: 5px;
   font-size: 0.85rem;
@@ -133,7 +137,7 @@ const STYLE = `
 }
 `;
 
-function JsonFormWidget({ schema, uischema, initialData }) {
+function JsonFormWidget({ schema, uischema, initialData, userStyle }) {
   const [data, setData] = React.useState(initialData ?? {});
   const [errors, setErrors] = React.useState([]);
   const [submitted, setSubmitted] = React.useState(null);
@@ -144,6 +148,8 @@ function JsonFormWidget({ schema, uischema, initialData }) {
     'div',
     { className: 'myst-jsonform' },
     React.createElement('style', null, STYLE),
+    // User CSS goes AFTER the base stylesheet so equal-specificity rules win.
+    userStyle && React.createElement('style', null, userStyle),
     React.createElement(JsonForms, {
       schema,
       // undefined uischema => JSONForms auto-generates a layout from the schema
@@ -187,15 +193,27 @@ function JsonFormWidget({ schema, uischema, initialData }) {
 
 function render({ model, el }) {
   const get = (k) => (typeof model.get === 'function' ? model.get(k) : model[k]);
-  const root = createRoot(el);
+  // Render into a child, NOT directly into `el`: React's createRoot clears its
+  // container, which would wipe out the <link> the theme appends for `node.css`
+  // (the `Style:` file/URL reference). Insert the mount as the FIRST child so
+  // that <link> stays a sibling AND lands after our base <style> in document
+  // order — otherwise the base stylesheet would win the cascade over the user's
+  // referenced file for equal-specificity rules.
+  const mount = document.createElement('div');
+  el.insertBefore(mount, el.firstChild);
+  const root = createRoot(mount);
   root.render(
     React.createElement(JsonFormWidget, {
       schema: get('schema'),
       uischema: get('uischema'),
       initialData: get('data'),
+      userStyle: get('style'),
     }),
   );
-  return () => root.unmount();
+  return () => {
+    root.unmount();
+    mount.remove();
+  };
 }
 
 export default { render };
