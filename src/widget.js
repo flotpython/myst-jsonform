@@ -10,7 +10,15 @@
 import * as React from 'react';
 import { createRoot } from 'react-dom/client';
 import { JsonForms } from '@jsonforms/react';
+import { createAjv } from '@jsonforms/core';
 import { vanillaRenderers, vanillaCells } from '@jsonforms/vanilla-renderers';
+import ajvErrors from 'ajv-errors';
+
+// A single shared ajv, configured like JSONForms' default (allErrors, formats)
+// plus the ajv-errors plugin. This lets a schema supply its own `errorMessage`,
+// replacing ajv's raw defaults ("must match pattern ...") with legible text and
+// collapsing multiple keyword errors on one field into a single message.
+const ajv = ajvErrors(createAjv());
 
 /**
  * Base stylesheet for @jsonforms/vanilla-renderers, which ships no CSS of its
@@ -58,12 +66,16 @@ const STYLE = `
   border-color: var(--jsonform-accent, #4a90e2);
   box-shadow: 0 0 0 2px var(--jsonform-focus-ring, rgba(74, 144, 226, 0.25));
 }
+/* The vanilla control reuses one div for both: it has class "validation" plus
+   "input-description" when valid (shows the description) or "validation_error"
+   when invalid (shows the error). So default it to muted and only redden the
+   error state. The input itself gains an "invalid" class when it fails. */
+.control > .validation { font-size: 0.8rem; color: var(--jsonform-muted, #6b7280); }
 .control > .input-description { font-size: 0.8rem; color: var(--jsonform-muted, #6b7280); }
-.control > .validation { font-size: 0.8rem; color: var(--jsonform-error, #d6336c); }
-.control.validation_error .input,
-.control.validation_error input,
-.control.validation_error select,
-.control.validation_error textarea { border-color: var(--jsonform-error, #d6336c); }
+.control > .validation.validation_error { color: var(--jsonform-error, #d6336c); }
+.control input.invalid,
+.control select.invalid,
+.control textarea.invalid { border-color: var(--jsonform-error, #d6336c); }
 
 /* Array controls (lists of objects / enum checkboxes) */
 button {
@@ -143,6 +155,12 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle }) {
   const [submitted, setSubmitted] = React.useState(null);
 
   const isValid = errors.length === 0;
+  // One field can raise several errors (e.g. both `pattern` and `format`), so
+  // count distinct fields, not raw errors. `required` errors report on the
+  // parent object, so key them by the missing property instead.
+  const fieldKey = (e) =>
+    e.instancePath || (e.params?.missingProperty ? `/${e.params.missingProperty}` : '');
+  const invalidCount = new Set(errors.map(fieldKey)).size;
 
   return React.createElement(
     'div',
@@ -157,6 +175,7 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle }) {
       data,
       renderers: vanillaRenderers,
       cells: vanillaCells,
+      ajv,
       onChange: ({ data: next, errors: errs }) => {
         setData(next);
         setErrors(errs ?? []);
@@ -179,7 +198,7 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle }) {
         React.createElement(
           'span',
           { className: 'myst-jsonform-invalid' },
-          `${errors.length} field(s) need attention`,
+          `${invalidCount} field(s) need attention`,
         ),
     ),
     submitted &&
