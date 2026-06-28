@@ -24036,6 +24036,8 @@ button:hover { background: var(--jsonform-modest-bg-hover, #e7ebf1); }
 .myst-jsonform-submit:hover { background: var(--jsonform-accent-hover, #3b7dd0); }
 .myst-jsonform-submit:disabled { background: #b9c4d2; cursor: not-allowed; }
 .myst-jsonform-invalid { font-size: 0.85rem; color: var(--jsonform-error, #d6336c); }
+.myst-jsonform-success { font-size: 0.85rem; color: var(--jsonform-success, #2e7d32); }
+.myst-jsonform-pending { font-size: 0.85rem; color: var(--jsonform-muted, #6b7280); }
 .myst-jsonform-result {
   margin-top: 0.85rem;
   padding: 0.7rem 0.85rem;
@@ -24047,13 +24049,66 @@ button:hover { background: var(--jsonform-modest-bg-hover, #e7ebf1); }
   overflow-x: auto;
 }
 `;
-function JsonFormWidget({ schema, uischema, initialData, userStyle }) {
+function normalizeSubmit(submit) {
+  if (submit == null) return [{ type: "print" }];
+  return Array.isArray(submit) ? submit : [submit];
+}
+async function runAction(action, data) {
+  const type = action.type ?? "print";
+  if (type === "print") {
+    return { type, data };
+  }
+  if (type === "webapi") {
+    if (!action.url) throw new Error('webapi: missing "url"');
+    const method = action.method ?? "POST";
+    const contentType = action.json ? "application/json" : "text/plain;charset=UTF-8";
+    const res = await fetch(action.url, {
+      method,
+      redirect: "follow",
+      // follow 3xx
+      headers: { "Content-Type": contentType },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error(`webapi: ${action.url} \u2192 HTTP ${res.status}`);
+    const text = await res.text();
+    let payload = text;
+    try {
+      payload = JSON.parse(text);
+    } catch {
+    }
+    console.log(`[jsonform] webapi ${method} ${action.url} \u2192 HTTP ${res.status}`, payload);
+    return { type, status: res.status };
+  }
+  throw new Error(`unknown submit type: "${type}"`);
+}
+function JsonFormWidget({ schema, uischema, initialData, userStyle, submit }) {
   const [data, setData] = React3.useState(initialData ?? {});
   const [errors, setErrors] = React3.useState([]);
-  const [submitted, setSubmitted] = React3.useState(null);
+  const [status, setStatus] = React3.useState("idle");
+  const [message, setMessage] = React3.useState(null);
+  const [printData, setPrintData] = React3.useState(null);
+  const actions = React3.useMemo(() => normalizeSubmit(submit), [submit]);
   const isValid = errors.length === 0;
   const fieldKey = (e) => e.instancePath || (e.params?.missingProperty ? `/${e.params.missingProperty}` : "");
   const invalidCount = new Set(errors.map(fieldKey)).size;
+  async function onSubmit() {
+    setStatus("pending");
+    setMessage(null);
+    setPrintData(null);
+    try {
+      let toPrint = null;
+      for (const action of actions) {
+        const out = await runAction(action, data);
+        if (out.type === "print") toPrint = out.data;
+      }
+      setPrintData(toPrint);
+      setStatus("success");
+      setMessage("Submitted");
+    } catch (err) {
+      setStatus("error");
+      setMessage(String(err?.message ?? err));
+    }
+  }
   return React3.createElement(
     "div",
     { className: "myst-jsonform" },
@@ -24071,6 +24126,9 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle }) {
       onChange: ({ data: next, errors: errs }) => {
         setData(next);
         setErrors(errs ?? []);
+        setStatus("idle");
+        setMessage(null);
+        setPrintData(null);
       }
     }),
     React3.createElement(
@@ -24081,21 +24139,23 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle }) {
         {
           type: "button",
           className: "myst-jsonform-submit",
-          disabled: !isValid,
-          onClick: () => setSubmitted(data)
+          disabled: !isValid || status === "pending",
+          onClick: onSubmit
         },
-        "Submit"
+        status === "pending" ? "Submitting\u2026" : "Submit"
       ),
       !isValid && React3.createElement(
         "span",
         { className: "myst-jsonform-invalid" },
         `${invalidCount} field(s) need attention`
-      )
+      ),
+      status === "success" && React3.createElement("span", { className: "myst-jsonform-success" }, `\u2713 ${message}`),
+      status === "error" && React3.createElement("span", { className: "myst-jsonform-invalid" }, `\u2717 ${message}`)
     ),
-    submitted && React3.createElement(
+    printData != null && React3.createElement(
       "pre",
       { className: "myst-jsonform-result" },
-      JSON.stringify(submitted, null, 2)
+      JSON.stringify(printData, null, 2)
     )
   );
 }
@@ -24109,7 +24169,8 @@ function render({ model, el }) {
       schema: get2("schema"),
       uischema: get2("uischema"),
       initialData: get2("data"),
-      userStyle: get2("style")
+      userStyle: get2("style"),
+      submit: get2("submit")
     })
   );
   return () => {
