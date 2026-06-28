@@ -16939,9 +16939,9 @@ var require_limit = __commonJS({
       },
       dependencies: ["format"]
     };
-    var formatLimitPlugin = (ajv) => {
-      ajv.addKeyword(exports.formatLimitDefinition);
-      return ajv;
+    var formatLimitPlugin = (ajv2) => {
+      ajv2.addKeyword(exports.formatLimitDefinition);
+      return ajv2;
     };
     exports.default = formatLimitPlugin;
   }
@@ -16957,17 +16957,17 @@ var require_dist = __commonJS({
     var codegen_1 = require_codegen();
     var fullName = new codegen_1.Name("fullFormats");
     var fastName = new codegen_1.Name("fastFormats");
-    var formatsPlugin = (ajv, opts = { keywords: true }) => {
+    var formatsPlugin = (ajv2, opts = { keywords: true }) => {
       if (Array.isArray(opts)) {
-        addFormats2(ajv, opts, formats_1.fullFormats, fullName);
-        return ajv;
+        addFormats2(ajv2, opts, formats_1.fullFormats, fullName);
+        return ajv2;
       }
       const [formats, exportName] = opts.mode === "fast" ? [formats_1.fastFormats, fastName] : [formats_1.fullFormats, fullName];
       const list = opts.formats || formats_1.formatNames;
-      addFormats2(ajv, list, formats, exportName);
+      addFormats2(ajv2, list, formats, exportName);
       if (opts.keywords)
-        limit_1.default(ajv);
-      return ajv;
+        limit_1.default(ajv2);
+      return ajv2;
     };
     formatsPlugin.get = (name, mode = "full") => {
       const formats = mode === "fast" ? formats_1.fastFormats : formats_1.fullFormats;
@@ -16976,12 +16976,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats2(ajv, list, fs, exportName) {
+    function addFormats2(ajv2, list, fs, exportName) {
       var _a;
       var _b;
-      (_a = (_b = ajv.opts.code).formats) !== null && _a !== void 0 ? _a : _b.formats = codegen_1._`require("ajv-formats/dist/formats").${exportName}`;
+      (_a = (_b = ajv2.opts.code).formats) !== null && _a !== void 0 ? _a : _b.formats = codegen_1._`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs[f]);
+        ajv2.addFormat(f, fs[f]);
     }
     module.exports = exports = formatsPlugin;
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -20515,6 +20515,286 @@ var require_startCase2 = __commonJS({
   }
 });
 
+// node_modules/ajv-errors/dist/index.js
+var require_dist2 = __commonJS({
+  "node_modules/ajv-errors/dist/index.js"(exports, module) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var ajv_1 = require_ajv();
+    var codegen_1 = require_codegen();
+    var code_1 = require_code();
+    var validate_1 = require_validate();
+    var errors_1 = require_errors();
+    var names_1 = require_names();
+    var keyword = "errorMessage";
+    var used = new ajv_1.Name("emUsed");
+    var KEYWORD_PROPERTY_PARAMS = {
+      required: "missingProperty",
+      dependencies: "property",
+      dependentRequired: "property"
+    };
+    var INTERPOLATION = /\$\{[^}]+\}/;
+    var INTERPOLATION_REPLACE = /\$\{([^}]+)\}/g;
+    var EMPTY_STR = /^""\s*\+\s*|\s*\+\s*""$/g;
+    function errorMessage(options) {
+      return {
+        keyword,
+        schemaType: ["string", "object"],
+        post: true,
+        code(cxt) {
+          const { gen, data, schema, schemaValue, it } = cxt;
+          if (it.createErrors === false)
+            return;
+          const sch = schema;
+          const instancePath = codegen_1.strConcat(names_1.default.instancePath, it.errorPath);
+          gen.if(ajv_1._`${names_1.default.errors} > 0`, () => {
+            if (typeof sch == "object") {
+              const [kwdPropErrors, kwdErrors] = keywordErrorsConfig(sch);
+              if (kwdErrors)
+                processKeywordErrors(kwdErrors);
+              if (kwdPropErrors)
+                processKeywordPropErrors(kwdPropErrors);
+              processChildErrors(childErrorsConfig(sch));
+            }
+            const schMessage = typeof sch == "string" ? sch : sch._;
+            if (schMessage)
+              processAllErrors(schMessage);
+            if (!options.keepErrors)
+              removeUsedErrors();
+          });
+          function childErrorsConfig({ properties, items }) {
+            const errors = {};
+            if (properties) {
+              errors.props = {};
+              for (const p in properties)
+                errors.props[p] = [];
+            }
+            if (items) {
+              errors.items = {};
+              for (let i = 0; i < items.length; i++)
+                errors.items[i] = [];
+            }
+            return errors;
+          }
+          function keywordErrorsConfig(emSchema) {
+            let propErrors;
+            let errors;
+            for (const k in emSchema) {
+              if (k === "properties" || k === "items")
+                continue;
+              const kwdSch = emSchema[k];
+              if (typeof kwdSch == "object") {
+                propErrors || (propErrors = {});
+                const errMap = propErrors[k] = {};
+                for (const p in kwdSch)
+                  errMap[p] = [];
+              } else {
+                errors || (errors = {});
+                errors[k] = [];
+              }
+            }
+            return [propErrors, errors];
+          }
+          function processKeywordErrors(kwdErrors) {
+            const kwdErrs = gen.const("emErrors", ajv_1.stringify(kwdErrors));
+            const templates = gen.const("templates", getTemplatesCode(kwdErrors, schema));
+            gen.forOf("err", names_1.default.vErrors, (err) => gen.if(matchKeywordError(err, kwdErrs), () => gen.code(ajv_1._`${kwdErrs}[${err}.keyword].push(${err})`).assign(ajv_1._`${err}.${used}`, true)));
+            const { singleError } = options;
+            if (singleError) {
+              const message = gen.let("message", ajv_1._`""`);
+              const paramsErrors = gen.let("paramsErrors", ajv_1._`[]`);
+              loopErrors((key) => {
+                gen.if(message, () => gen.code(ajv_1._`${message} += ${typeof singleError == "string" ? singleError : ";"}`));
+                gen.code(ajv_1._`${message} += ${errMessage(key)}`);
+                gen.assign(paramsErrors, ajv_1._`${paramsErrors}.concat(${kwdErrs}[${key}])`);
+              });
+              errors_1.reportError(cxt, { message, params: ajv_1._`{errors: ${paramsErrors}}` });
+            } else {
+              loopErrors((key) => errors_1.reportError(cxt, {
+                message: errMessage(key),
+                params: ajv_1._`{errors: ${kwdErrs}[${key}]}`
+              }));
+            }
+            function loopErrors(body) {
+              gen.forIn("key", kwdErrs, (key) => gen.if(ajv_1._`${kwdErrs}[${key}].length`, () => body(key)));
+            }
+            function errMessage(key) {
+              return ajv_1._`${key} in ${templates} ? ${templates}[${key}]() : ${schemaValue}[${key}]`;
+            }
+          }
+          function processKeywordPropErrors(kwdPropErrors) {
+            const kwdErrs = gen.const("emErrors", ajv_1.stringify(kwdPropErrors));
+            const templatesCode = [];
+            for (const k in kwdPropErrors) {
+              templatesCode.push([
+                k,
+                getTemplatesCode(kwdPropErrors[k], schema[k])
+              ]);
+            }
+            const templates = gen.const("templates", gen.object(...templatesCode));
+            const kwdPropParams = gen.scopeValue("obj", {
+              ref: KEYWORD_PROPERTY_PARAMS,
+              code: ajv_1.stringify(KEYWORD_PROPERTY_PARAMS)
+            });
+            const propParam = gen.let("emPropParams");
+            const paramsErrors = gen.let("emParamsErrors");
+            gen.forOf("err", names_1.default.vErrors, (err) => gen.if(matchKeywordError(err, kwdErrs), () => {
+              gen.assign(propParam, ajv_1._`${kwdPropParams}[${err}.keyword]`);
+              gen.assign(paramsErrors, ajv_1._`${kwdErrs}[${err}.keyword][${err}.params[${propParam}]]`);
+              gen.if(paramsErrors, () => gen.code(ajv_1._`${paramsErrors}.push(${err})`).assign(ajv_1._`${err}.${used}`, true));
+            }));
+            gen.forIn("key", kwdErrs, (key) => gen.forIn("keyProp", ajv_1._`${kwdErrs}[${key}]`, (keyProp) => {
+              gen.assign(paramsErrors, ajv_1._`${kwdErrs}[${key}][${keyProp}]`);
+              gen.if(ajv_1._`${paramsErrors}.length`, () => {
+                const tmpl = gen.const("tmpl", ajv_1._`${templates}[${key}] && ${templates}[${key}][${keyProp}]`);
+                errors_1.reportError(cxt, {
+                  message: ajv_1._`${tmpl} ? ${tmpl}() : ${schemaValue}[${key}][${keyProp}]`,
+                  params: ajv_1._`{errors: ${paramsErrors}}`
+                });
+              });
+            }));
+          }
+          function processChildErrors(childErrors) {
+            const { props, items } = childErrors;
+            if (!props && !items)
+              return;
+            const isObj = ajv_1._`typeof ${data} == "object"`;
+            const isArr = ajv_1._`Array.isArray(${data})`;
+            const childErrs = gen.let("emErrors");
+            let childKwd;
+            let childProp;
+            const templates = gen.let("templates");
+            if (props && items) {
+              childKwd = gen.let("emChildKwd");
+              gen.if(isObj);
+              gen.if(isArr, () => {
+                init2(items, schema.items);
+                gen.assign(childKwd, ajv_1.str`items`);
+              }, () => {
+                init2(props, schema.properties);
+                gen.assign(childKwd, ajv_1.str`properties`);
+              });
+              childProp = ajv_1._`[${childKwd}]`;
+            } else if (items) {
+              gen.if(isArr);
+              init2(items, schema.items);
+              childProp = ajv_1._`.items`;
+            } else if (props) {
+              gen.if(codegen_1.and(isObj, codegen_1.not(isArr)));
+              init2(props, schema.properties);
+              childProp = ajv_1._`.properties`;
+            }
+            gen.forOf("err", names_1.default.vErrors, (err) => ifMatchesChildError(err, childErrs, (child) => gen.code(ajv_1._`${childErrs}[${child}].push(${err})`).assign(ajv_1._`${err}.${used}`, true)));
+            gen.forIn("key", childErrs, (key) => gen.if(ajv_1._`${childErrs}[${key}].length`, () => {
+              errors_1.reportError(cxt, {
+                message: ajv_1._`${key} in ${templates} ? ${templates}[${key}]() : ${schemaValue}${childProp}[${key}]`,
+                params: ajv_1._`{errors: ${childErrs}[${key}]}`
+              });
+              gen.assign(ajv_1._`${names_1.default.vErrors}[${names_1.default.errors}-1].instancePath`, ajv_1._`${instancePath} + "/" + ${key}.replace(/~/g, "~0").replace(/\\//g, "~1")`);
+            }));
+            gen.endIf();
+            function init2(children, msgs) {
+              gen.assign(childErrs, ajv_1.stringify(children));
+              gen.assign(templates, getTemplatesCode(children, msgs));
+            }
+          }
+          function processAllErrors(schMessage) {
+            const errs = gen.const("emErrs", ajv_1._`[]`);
+            gen.forOf("err", names_1.default.vErrors, (err) => gen.if(matchAnyError(err), () => gen.code(ajv_1._`${errs}.push(${err})`).assign(ajv_1._`${err}.${used}`, true)));
+            gen.if(ajv_1._`${errs}.length`, () => errors_1.reportError(cxt, {
+              message: templateExpr(schMessage),
+              params: ajv_1._`{errors: ${errs}}`
+            }));
+          }
+          function removeUsedErrors() {
+            const errs = gen.const("emErrs", ajv_1._`[]`);
+            gen.forOf("err", names_1.default.vErrors, (err) => gen.if(ajv_1._`!${err}.${used}`, () => gen.code(ajv_1._`${errs}.push(${err})`)));
+            gen.assign(names_1.default.vErrors, errs).assign(names_1.default.errors, ajv_1._`${errs}.length`);
+          }
+          function matchKeywordError(err, kwdErrs) {
+            return codegen_1.and(
+              ajv_1._`${err}.keyword !== ${keyword}`,
+              ajv_1._`!${err}.${used}`,
+              ajv_1._`${err}.instancePath === ${instancePath}`,
+              ajv_1._`${err}.keyword in ${kwdErrs}`,
+              // TODO match the end of the string?
+              ajv_1._`${err}.schemaPath.indexOf(${it.errSchemaPath}) === 0`,
+              ajv_1._`/^\\/[^\\/]*$/.test(${err}.schemaPath.slice(${it.errSchemaPath.length}))`
+            );
+          }
+          function ifMatchesChildError(err, childErrs, thenBody) {
+            gen.if(codegen_1.and(ajv_1._`${err}.keyword !== ${keyword}`, ajv_1._`!${err}.${used}`, ajv_1._`${err}.instancePath.indexOf(${instancePath}) === 0`), () => {
+              const childRegex = gen.scopeValue("pattern", {
+                ref: /^\/([^/]*)(?:\/|$)/,
+                code: ajv_1._`new RegExp("^\\\/([^/]*)(?:\\\/|$)")`
+              });
+              const matches = gen.const("emMatches", ajv_1._`${childRegex}.exec(${err}.instancePath.slice(${instancePath}.length))`);
+              const child = gen.const("emChild", ajv_1._`${matches} && ${matches}[1].replace(/~1/g, "/").replace(/~0/g, "~")`);
+              gen.if(ajv_1._`${child} !== undefined && ${child} in ${childErrs}`, () => thenBody(child));
+            });
+          }
+          function matchAnyError(err) {
+            return codegen_1.and(ajv_1._`${err}.keyword !== ${keyword}`, ajv_1._`!${err}.${used}`, codegen_1.or(ajv_1._`${err}.instancePath === ${instancePath}`, codegen_1.and(ajv_1._`${err}.instancePath.indexOf(${instancePath}) === 0`, ajv_1._`${err}.instancePath[${instancePath}.length] === "/"`)), ajv_1._`${err}.schemaPath.indexOf(${it.errSchemaPath}) === 0`, ajv_1._`${err}.schemaPath[${it.errSchemaPath}.length] === "/"`);
+          }
+          function getTemplatesCode(keys2, msgs) {
+            const templatesCode = [];
+            for (const k in keys2) {
+              const msg = msgs[k];
+              if (INTERPOLATION.test(msg))
+                templatesCode.push([k, templateFunc(msg)]);
+            }
+            return gen.object(...templatesCode);
+          }
+          function templateExpr(msg) {
+            if (!INTERPOLATION.test(msg))
+              return ajv_1.stringify(msg);
+            return new code_1._Code(code_1.safeStringify(msg).replace(INTERPOLATION_REPLACE, (_s, ptr) => `" + JSON.stringify(${validate_1.getData(ptr, it)}) + "`).replace(EMPTY_STR, ""));
+          }
+          function templateFunc(msg) {
+            return ajv_1._`function(){return ${templateExpr(msg)}}`;
+          }
+        },
+        metaSchema: {
+          anyOf: [
+            { type: "string" },
+            {
+              type: "object",
+              properties: {
+                properties: { $ref: "#/$defs/stringMap" },
+                items: { $ref: "#/$defs/stringList" },
+                required: { $ref: "#/$defs/stringOrMap" },
+                dependencies: { $ref: "#/$defs/stringOrMap" }
+              },
+              additionalProperties: { type: "string" }
+            }
+          ],
+          $defs: {
+            stringMap: {
+              type: "object",
+              additionalProperties: { type: "string" }
+            },
+            stringOrMap: {
+              anyOf: [{ type: "string" }, { $ref: "#/$defs/stringMap" }]
+            },
+            stringList: { type: "array", items: { type: "string" } }
+          }
+        }
+      };
+    }
+    var ajvErrors2 = (ajv2, options = {}) => {
+      if (!ajv2.opts.allErrors)
+        throw new Error("ajv-errors: Ajv option allErrors must be true");
+      if (ajv2.opts.jsPropertySyntax) {
+        throw new Error("ajv-errors: ajv option jsPropertySyntax is not supported");
+      }
+      return ajv2.addKeyword(errorMessage(options));
+    };
+    exports.default = ajvErrors2;
+    module.exports = ajvErrors2;
+    module.exports.default = ajvErrors2;
+  }
+});
+
 // src/widget.js
 var React3 = __toESM(require_react(), 1);
 var import_client = __toESM(require_client(), 1);
@@ -20898,11 +21178,11 @@ var isValidateFunctionCondition = (condition) => (0, import_has.default)(conditi
 var getConditionScope = (condition, path) => {
   return composeWithUi(condition, path);
 };
-var evaluateCondition = (data, uischema, condition, path, ajv, config) => {
+var evaluateCondition = (data, uischema, condition, path, ajv2, config) => {
   if (isAndCondition(condition)) {
-    return condition.conditions.reduce((acc, cur) => acc && evaluateCondition(data, uischema, cur, path, ajv, config), true);
+    return condition.conditions.reduce((acc, cur) => acc && evaluateCondition(data, uischema, cur, path, ajv2, config), true);
   } else if (isOrCondition(condition)) {
-    return condition.conditions.reduce((acc, cur) => acc || evaluateCondition(data, uischema, cur, path, ajv, config), false);
+    return condition.conditions.reduce((acc, cur) => acc || evaluateCondition(data, uischema, cur, path, ajv2, config), false);
   } else if (isLeafCondition(condition)) {
     const value = resolveData(data, getConditionScope(condition, path));
     return value === condition.expectedValue;
@@ -20911,7 +21191,7 @@ var evaluateCondition = (data, uischema, condition, path, ajv, config) => {
     if (condition.failWhenUndefined && value === void 0) {
       return false;
     }
-    return ajv.validate(condition.schema, value);
+    return ajv2.validate(condition.schema, value);
   } else if (isValidateFunctionCondition(condition)) {
     const value = resolveData(data, getConditionScope(condition, path));
     const context = {
@@ -20926,12 +21206,12 @@ var evaluateCondition = (data, uischema, condition, path, ajv, config) => {
     return true;
   }
 };
-var isRuleFulfilled = (uischema, data, path, ajv, config) => {
+var isRuleFulfilled = (uischema, data, path, ajv2, config) => {
   const condition = uischema.rule.condition;
-  return evaluateCondition(data, uischema, condition, path, ajv, config);
+  return evaluateCondition(data, uischema, condition, path, ajv2, config);
 };
-var evalVisibility = (uischema, data, path = void 0, ajv, config) => {
-  const fulfilled = isRuleFulfilled(uischema, data, path, ajv, config);
+var evalVisibility = (uischema, data, path = void 0, ajv2, config) => {
+  const fulfilled = isRuleFulfilled(uischema, data, path, ajv2, config);
   switch (uischema.rule.effect) {
     case RuleEffect.HIDE:
       return !fulfilled;
@@ -20941,8 +21221,8 @@ var evalVisibility = (uischema, data, path = void 0, ajv, config) => {
       return true;
   }
 };
-var evalEnablement = (uischema, data, path = void 0, ajv, config) => {
-  const fulfilled = isRuleFulfilled(uischema, data, path, ajv, config);
+var evalEnablement = (uischema, data, path = void 0, ajv2, config) => {
+  const fulfilled = isRuleFulfilled(uischema, data, path, ajv2, config);
   switch (uischema.rule.effect) {
     case RuleEffect.DISABLE:
       return !fulfilled;
@@ -20952,8 +21232,8 @@ var evalEnablement = (uischema, data, path = void 0, ajv, config) => {
       return true;
   }
 };
-var evalReadonly = (uischema, data, path = void 0, ajv, config) => {
-  const fulfilled = isRuleFulfilled(uischema, data, path, ajv, config);
+var evalReadonly = (uischema, data, path = void 0, ajv2, config) => {
+  const fulfilled = isRuleFulfilled(uischema, data, path, ajv2, config);
   switch (uischema.rule.effect) {
     case RuleEffect.WRITABLE:
       return !fulfilled;
@@ -20981,21 +21261,21 @@ var hasReadonlyRule = (uischema) => {
   }
   return false;
 };
-var isVisible = (uischema, data, path = void 0, ajv, config) => {
+var isVisible = (uischema, data, path = void 0, ajv2, config) => {
   if (uischema.rule) {
-    return evalVisibility(uischema, data, path, ajv, config);
+    return evalVisibility(uischema, data, path, ajv2, config);
   }
   return true;
 };
-var isEnabled = (uischema, data, path = void 0, ajv, config) => {
+var isEnabled = (uischema, data, path = void 0, ajv2, config) => {
   if (uischema.rule) {
-    return evalEnablement(uischema, data, path, ajv, config);
+    return evalEnablement(uischema, data, path, ajv2, config);
   }
   return true;
 };
-var isReadonly = (uischema, data, path = void 0, ajv, config) => {
+var isReadonly = (uischema, data, path = void 0, ajv2, config) => {
   if (uischema.rule) {
-    return evalReadonly(uischema, data, path, ajv, config);
+    return evalReadonly(uischema, data, path, ajv2, config);
   }
   return false;
 };
@@ -21061,15 +21341,15 @@ var Paths = {
   fromScoped
 };
 var createAjv = (options) => {
-  const ajv = new import_ajv.default({
+  const ajv2 = new import_ajv.default({
     allErrors: true,
     verbose: true,
     strict: false,
     addUsedSchema: false,
     ...options
   });
-  (0, import_ajv_formats.default)(ajv);
-  return ajv;
+  (0, import_ajv_formats.default)(ajv2);
+  return ajv2;
 };
 var validate = (validator, data) => {
   if (validator === void 0) {
@@ -21296,9 +21576,9 @@ var unregisterDefaultData = (schemaPath) => ({
   type: REMOVE_DEFAULT_DATA,
   schemaPath
 });
-var setAjv = (ajv) => ({
+var setAjv = (ajv2) => ({
   type: SET_AJV,
-  ajv
+  ajv: ajv2
 });
 var update = (path, updater, context) => ({
   type: UPDATE_DATA,
@@ -22647,19 +22927,19 @@ var useEffectAfterFirstRender = (effect, dependencies) => {
   }, dependencies);
 };
 var JsonFormsStateProvider = ({ children, initState: initState2, onChange, middleware }) => {
-  const { data, schema, uischema, ajv, validationMode, additionalErrors } = initState2.core;
+  const { data, schema, uischema, ajv: ajv2, validationMode, additionalErrors } = initState2.core;
   const middlewareRef = (0, import_react.useRef)(middleware ?? defaultMiddleware);
   middlewareRef.current = middleware ?? defaultMiddleware;
   const [core, setCore] = (0, import_react.useState)(() => middlewareRef.current(initState2.core, index$1.init(data, schema, uischema, {
-    ajv,
+    ajv: ajv2,
     validationMode,
     additionalErrors
   }), coreReducer));
   (0, import_react.useEffect)(() => setCore((currentCore) => middlewareRef.current(currentCore, index$1.updateCore(data, schema, uischema, {
-    ajv,
+    ajv: ajv2,
     validationMode,
     additionalErrors
-  }), coreReducer)), [data, schema, uischema, ajv, validationMode, additionalErrors]);
+  }), coreReducer)), [data, schema, uischema, ajv2, validationMode, additionalErrors]);
   const [config, configDispatch] = (0, import_react.useReducer)(configReducer, void 0, () => configReducer(void 0, index$1.setConfig(initState2.config)));
   useEffectAfterFirstRender(() => {
     configDispatch(index$1.setConfig(initState2.config));
@@ -22865,14 +23145,14 @@ var ResolvedJsonFormsDispatchRenderer = class extends JsonFormsDispatchRenderer 
 var JsonFormsDispatch = withJsonFormsRendererProps(JsonFormsDispatchRenderer);
 var ResolvedJsonFormsDispatch = withJsonFormsRendererProps(ResolvedJsonFormsDispatchRenderer);
 var JsonForms = (props) => {
-  const { ajv, data, schema, uischema, renderers, cells, onChange, config, uischemas, readonly, validationMode, i18n, additionalErrors, middleware } = props;
+  const { ajv: ajv2, data, schema, uischema, renderers, cells, onChange, config, uischemas, readonly, validationMode, i18n, additionalErrors, middleware } = props;
   const schemaToUse = (0, import_react.useMemo)(() => schema !== void 0 ? schema : Generate.jsonSchema(data), [schema, data]);
   const uischemaToUse = (0, import_react.useMemo)(() => typeof uischema === "object" ? uischema : Generate.uiSchema(schemaToUse, void 0, void 0, schemaToUse), [uischema, schemaToUse]);
   return import_react.default.createElement(
     JsonFormsStateProvider,
     { initState: {
       core: {
-        ajv,
+        ajv: ajv2,
         data,
         schema: schemaToUse,
         uischema: uischemaToUse,
@@ -23128,8 +23408,8 @@ var withVanillaCellPropsForType = (type) => (Component2) => function WithVanilla
 };
 var withAjvProps = (Component2) => function WithAjvProps(props) {
   const ctx = useJsonForms();
-  const ajv = getAjv({ jsonforms: { ...ctx } });
-  return import_react2.default.createElement(Component2, { ...props, ajv });
+  const ajv2 = getAjv({ jsonforms: { ...ctx } });
+  return import_react2.default.createElement(Component2, { ...props, ajv: ajv2 });
 };
 var withVanillaCellProps = withVanillaCellPropsForType("control.input");
 var withVanillaEnumCellProps = withVanillaCellPropsForType("control.select");
@@ -23290,10 +23570,10 @@ var categorizationTester = rankWith(1, and(uiTypeIs("Categorization"), (uischema
   return hasCategory2(uischema);
 }));
 var getCategoryClassName = (category, selectedCategory) => selectedCategory === category ? "selected" : "";
-var CategorizationList = ({ selectedCategory, elements, data, depth, onSelect, subcategoriesClassName, groupClassName, t, ajv, config }) => {
+var CategorizationList = ({ selectedCategory, elements, data, depth, onSelect, subcategoriesClassName, groupClassName, t, ajv: ajv2, config }) => {
   const filteredElements = (0, import_react2.useMemo)(() => {
-    return elements.filter((category) => isVisible(category, data, void 0, ajv, config));
-  }, [elements, data, ajv, config]);
+    return elements.filter((category) => isVisible(category, data, void 0, ajv2, config));
+  }, [elements, data, ajv2, config]);
   const categoryLabels = (0, import_react2.useMemo)(() => filteredElements.map((cat) => deriveLabelForUISchemaElement(cat, t)), [filteredElements, t]);
   return import_react2.default.createElement("ul", { className: subcategoriesClassName }, filteredElements.map((category, idx) => {
     if (isCategorization2(category)) {
@@ -23301,7 +23581,7 @@ var CategorizationList = ({ selectedCategory, elements, data, depth, onSelect, s
         "li",
         { key: categoryLabels[idx], className: groupClassName },
         import_react2.default.createElement("span", null, categoryLabels[idx]),
-        import_react2.default.createElement(CategorizationList, { selectedCategory, elements: category.elements, data, ajv, config, depth: depth + 1, onSelect, subcategoriesClassName, groupClassName, t })
+        import_react2.default.createElement(CategorizationList, { selectedCategory, elements: category.elements, data, ajv: ajv2, config, depth: depth + 1, onSelect, subcategoriesClassName, groupClassName, t })
       );
     } else {
       return import_react2.default.createElement(
@@ -23313,7 +23593,7 @@ var CategorizationList = ({ selectedCategory, elements, data, depth, onSelect, s
   }));
 };
 var SingleCategory = ({ category, schema, path }) => import_react2.default.createElement("div", { id: "categorization.detail" }, (category.elements || []).map((child, index2) => import_react2.default.createElement(JsonFormsDispatch, { key: `${path}-${index2}`, uischema: child, schema, path })));
-var CategorizationRenderer = ({ data, uischema, schema, path, selected, t, visible, getStyleAsClassName, onChange, ajv, config }) => {
+var CategorizationRenderer = ({ data, uischema, schema, path, selected, t, visible, getStyleAsClassName, onChange, ajv: ajv2, config }) => {
   const categorization = uischema;
   const elements = categorization.elements;
   const classNames = getStyleAsClassName("categorization");
@@ -23340,7 +23620,7 @@ var CategorizationRenderer = ({ data, uischema, schema, path, selected, t, visib
     import_react2.default.createElement(
       "div",
       { className: masterClassNames },
-      import_react2.default.createElement(CategorizationList, { elements, selectedCategory: elements[safeCategory], data, ajv, config, depth: 0, onSelect: onCategorySelected, subcategoriesClassName, groupClassName, t })
+      import_react2.default.createElement(CategorizationList, { elements, selectedCategory: elements[safeCategory], data, ajv: ajv2, config, depth: 0, onSelect: onCategorySelected, subcategoriesClassName, groupClassName, t })
     ),
     import_react2.default.createElement(
       "div",
@@ -23648,6 +23928,8 @@ var vanillaCells = [
 ];
 
 // src/widget.js
+var import_ajv_errors = __toESM(require_dist2(), 1);
+var ajv = (0, import_ajv_errors.default)(createAjv());
 var STYLE = `
 .myst-jsonform {
   max-width: var(--jsonform-max-width, 32rem);
@@ -23683,12 +23965,16 @@ var STYLE = `
   border-color: var(--jsonform-accent, #4a90e2);
   box-shadow: 0 0 0 2px var(--jsonform-focus-ring, rgba(74, 144, 226, 0.25));
 }
+/* The vanilla control reuses one div for both: it has class "validation" plus
+   "input-description" when valid (shows the description) or "validation_error"
+   when invalid (shows the error). So default it to muted and only redden the
+   error state. The input itself gains an "invalid" class when it fails. */
+.control > .validation { font-size: 0.8rem; color: var(--jsonform-muted, #6b7280); }
 .control > .input-description { font-size: 0.8rem; color: var(--jsonform-muted, #6b7280); }
-.control > .validation { font-size: 0.8rem; color: var(--jsonform-error, #d6336c); }
-.control.validation_error .input,
-.control.validation_error input,
-.control.validation_error select,
-.control.validation_error textarea { border-color: var(--jsonform-error, #d6336c); }
+.control > .validation.validation_error { color: var(--jsonform-error, #d6336c); }
+.control input.invalid,
+.control select.invalid,
+.control textarea.invalid { border-color: var(--jsonform-error, #d6336c); }
 
 /* Array controls (lists of objects / enum checkboxes) */
 button {
@@ -23766,6 +24052,8 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle }) {
   const [errors, setErrors] = React3.useState([]);
   const [submitted, setSubmitted] = React3.useState(null);
   const isValid = errors.length === 0;
+  const fieldKey = (e) => e.instancePath || (e.params?.missingProperty ? `/${e.params.missingProperty}` : "");
+  const invalidCount = new Set(errors.map(fieldKey)).size;
   return React3.createElement(
     "div",
     { className: "myst-jsonform" },
@@ -23779,6 +24067,7 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle }) {
       data,
       renderers: vanillaRenderers,
       cells: vanillaCells,
+      ajv,
       onChange: ({ data: next, errors: errs }) => {
         setData(next);
         setErrors(errs ?? []);
@@ -23800,7 +24089,7 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle }) {
       !isValid && React3.createElement(
         "span",
         { className: "myst-jsonform-invalid" },
-        `${errors.length} field(s) need attention`
+        `${invalidCount} field(s) need attention`
       )
     ),
     submitted && React3.createElement(
