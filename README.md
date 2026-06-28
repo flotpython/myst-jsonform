@@ -16,10 +16,9 @@ project:
 
 ## The directive body: two modes
 
-The body can be written in **YAML or JSON** (YAML is a superset of JSON, so both
-work), in one of two modes.
+The body can be written in **YAML or JSON**, in one of two modes.
 
-### Mode 1 — a bare JSON Schema
+### Mode 1 — a single Schema
 
 The whole body *is* the JSON Schema. JSONForms auto-generates the layout.
 
@@ -45,17 +44,13 @@ This unlocks a custom layout, initial data, and styling. Two families of keys:
 **JSONForms-native** — these mirror the three tabs on the
 [jsonforms.io](https://jsonforms.io) examples:
 
-| key        | required | meaning |
-|------------|----------|---------|
-| `Schema`   | yes      | the JSON Schema |
-| `UISchema` | no       | the [UI Schema](https://jsonforms.io/docs/uischema/) (layout); auto-generated if omitted |
-| `Data`     | no       | initial form data |
-
-**Plugin extras** — processed by this plugin, not part of JSONForms:
-
-| key     | meaning |
-|---------|---------|
-| `Style` | per-form CSS — inline rules, or a path/URL to a `.css` file (see [Styling](#styling)) |
+| key        | supported by |required | meaning | 
+|------------|----------|---------|---|
+| `Schema`   | jsonforms.io | yes      | the JSON Schema | 
+| `UISchema` | jsonforms.io | no, auto-generated if omitted     | the [UI Schema](https://jsonforms.io/docs/uischema/) (layout);  | 
+| `Data`     | jsonforms.io | no       | initial form data | 
+| `Style`    | this plugin  | no | per-form CSS — see [Styling](#styling) | 
+| `Submit`   | this plugin  | no, defaults to `print` | what happens on submit — see [Submit actions](#submit-actions) | 
 
 Key names are matched case-insensitively and ignoring spaces/underscores, so
 `UISchema`, `UI Schema` and `ui_schema` are equivalent.
@@ -156,6 +151,58 @@ page. There are three ways to customise it:
    ```yaml
    Style: _static/style_forms.css
    ```
+
+## Submit actions
+
+The `Submit` chunk says what happens when the (validated) form is submitted. It
+is either a single action or a **list** of actions, each with a `type`. On
+submit they run in order; the form reports **success only if every action
+succeeds**, otherwise it shows the first failure.
+
+If `Submit` is omitted, the default is a single `print` action.
+
+### `type: print`
+
+Shows the collected data as JSON below the form (the default behaviour). Always
+succeeds.
+
+```yaml
+Submit:
+  type: print
+```
+
+### `type: webapi`
+
+Sends the data to an HTTP endpoint with `fetch`.
+
+| key      | default      | meaning |
+|----------|--------------|---------|
+| `url`    | *(required)* | endpoint to send to |
+| `method` | `POST`       | HTTP method |
+| `json`   | `false`      | content-type: `false` → `text/plain` (no CORS preflight), `true` → `application/json` |
+
+```yaml
+Submit:
+  type: webapi
+  url: https://data-collector.example/survey/12/response
+```
+
+- **Success** = the response status is `2xx`. Redirects (`3xx`) are followed.
+- **CORS**: by default the body is sent as `text/plain` (still a JSON string),
+  which is a "simple" request and avoids the browser's CORS preflight — so the
+  endpoint only needs to return `Access-Control-Allow-Origin`. Set `json: true`
+  to use the official `application/json` content-type, which triggers a preflight
+  (the server must then also handle `OPTIONS`). All CORS configuration is on the
+  **endpoint's** server, never the page's.
+
+### A list of actions
+
+```yaml
+Submit:
+  - type: print
+  - type: webapi
+    url: https://data-collector.example/survey/12/response
+```
 
 ## More examples
 

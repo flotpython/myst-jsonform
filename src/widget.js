@@ -137,6 +137,8 @@ button:hover { background: var(--jsonform-modest-bg-hover, #e7ebf1); }
 .myst-jsonform-submit:hover { background: var(--jsonform-accent-hover, #3b7dd0); }
 .myst-jsonform-submit:disabled { background: #b9c4d2; cursor: not-allowed; }
 .myst-jsonform-invalid { font-size: 0.85rem; color: var(--jsonform-error, #d6336c); }
+.myst-jsonform-success { font-size: 0.85rem; color: var(--jsonform-success, #2e7d32); }
+.myst-jsonform-pending { font-size: 0.85rem; color: var(--jsonform-muted, #6b7280); }
 .myst-jsonform-result {
   margin-top: 0.85rem;
   padding: 0.7rem 0.85rem;
@@ -149,11 +151,58 @@ button:hover { background: var(--jsonform-modest-bg-hover, #e7ebf1); }
 }
 `;
 
-function JsonFormWidget({ schema, uischema, initialData, userStyle }) {
+// `Submit` may be omitted (defaults to a single `print`), a single action, or a
+// list of actions. Normalize to an array.
+function normalizeSubmit(submit) {
+  if (submit == null) return [{ type: 'print' }];
+  return Array.isArray(submit) ? submit : [submit];
+}
+
+// Run one submit action against the current form data. Resolves on success;
+// throws on failure (which the caller turns into the error report).
+async function runAction(action, data) {
+  const type = action.type ?? 'print';
+  if (type === 'print') {
+    return { type, data };
+  }
+  if (type === 'webapi') {
+    if (!action.url) throw new Error('webapi: missing "url"');
+    const method = action.method ?? 'POST';
+    // Default to a "simple" content-type (text/plain) so the browser skips the
+    // CORS preflight; the body is still JSON. Set `json: true` to use the
+    // official application/json (which triggers a preflight on the server).
+    const contentType = action.json ? 'application/json' : 'text/plain;charset=UTF-8';
+    const res = await fetch(action.url, {
+      method,
+      redirect: 'follow', // follow 3xx
+      headers: { 'Content-Type': contentType },
+      body: JSON.stringify(data),
+    });
+    // res.ok is exactly 200 <= status < 300
+    if (!res.ok) throw new Error(`webapi: ${action.url} → HTTP ${res.status}`);
+    // Confirm the call went through, and log the response body (parsed as JSON
+    // when possible, otherwise raw text).
+    const text = await res.text();
+    let payload = text;
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      /* not JSON — keep the raw text */
+    }
+    console.log(`[jsonform] webapi ${method} ${action.url} → HTTP ${res.status}`, payload);
+    return { type, status: res.status };
+  }
+  throw new Error(`unknown submit type: "${type}"`);
+}
+
+function JsonFormWidget({ schema, uischema, initialData, userStyle, submit }) {
   const [data, setData] = React.useState(initialData ?? {});
   const [errors, setErrors] = React.useState([]);
-  const [submitted, setSubmitted] = React.useState(null);
+  const [status, setStatus] = React.useState('idle'); // idle | pending | success | error
+  const [message, setMessage] = React.useState(null);
+  const [printData, setPrintData] = React.useState(null);
 
+  const actions = React.useMemo(() => normalizeSubmit(submit), [submit]);
   const isValid = errors.length === 0;
   // One field can raise several errors (e.g. both `pattern` and `format`), so
   // count distinct fields, not raw errors. `required` errors report on the
@@ -161,6 +210,27 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle }) {
   const fieldKey = (e) =>
     e.instancePath || (e.params?.missingProperty ? `/${e.params.missingProperty}` : '');
   const invalidCount = new Set(errors.map(fieldKey)).size;
+
+  async function onSubmit() {
+    setStatus('pending');
+    setMessage(null);
+    setPrintData(null);
+    try {
+      // Run actions in order; success requires ALL of them to succeed (the
+      // first failure throws out of the loop).
+      let toPrint = null;
+      for (const action of actions) {
+        const out = await runAction(action, data);
+        if (out.type === 'print') toPrint = out.data;
+      }
+      setPrintData(toPrint);
+      setStatus('success');
+      setMessage('Submitted');
+    } catch (err) {
+      setStatus('error');
+      setMessage(String(err?.message ?? err));
+    }
+  }
 
   return React.createElement(
     'div',
@@ -179,6 +249,10 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle }) {
       onChange: ({ data: next, errors: errs }) => {
         setData(next);
         setErrors(errs ?? []);
+        // A change invalidates any previous submit outcome.
+        setStatus('idle');
+        setMessage(null);
+        setPrintData(null);
       },
     }),
     React.createElement(
@@ -189,10 +263,10 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle }) {
         {
           type: 'button',
           className: 'myst-jsonform-submit',
-          disabled: !isValid,
-          onClick: () => setSubmitted(data),
+          disabled: !isValid || status === 'pending',
+          onClick: onSubmit,
         },
-        'Submit',
+        status === 'pending' ? 'Submitting…' : 'Submit',
       ),
       !isValid &&
         React.createElement(
@@ -200,12 +274,16 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle }) {
           { className: 'myst-jsonform-invalid' },
           `${invalidCount} field(s) need attention`,
         ),
+      status === 'success' &&
+        React.createElement('span', { className: 'myst-jsonform-success' }, `✓ ${message}`),
+      status === 'error' &&
+        React.createElement('span', { className: 'myst-jsonform-invalid' }, `✗ ${message}`),
     ),
-    submitted &&
+    printData != null &&
       React.createElement(
         'pre',
         { className: 'myst-jsonform-result' },
-        JSON.stringify(submitted, null, 2),
+        JSON.stringify(printData, null, 2),
       ),
   );
 }
@@ -227,6 +305,7 @@ function render({ model, el }) {
       uischema: get('uischema'),
       initialData: get('data'),
       userStyle: get('style'),
+      submit: get('submit'),
     }),
   );
   return () => {

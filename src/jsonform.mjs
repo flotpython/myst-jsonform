@@ -61,9 +61,10 @@ function extractParts(parsed) {
       uischema: byNorm.uischema ? parsed[byNorm.uischema] : undefined,
       data: byNorm.data ? parsed[byNorm.data] : undefined,
       style: byNorm.style ? parsed[byNorm.style] : undefined,
+      submit: byNorm.submit ? parsed[byNorm.submit] : undefined,
     };
   }
-  return { schema: parsed, uischema: undefined, data: undefined, style: undefined };
+  return { schema: parsed, uischema: undefined, data: undefined, style: undefined, submit: undefined };
 }
 
 /**
@@ -96,14 +97,14 @@ const jsonformDirective = {
       vfile.message('jsonform: body must define a JSON Schema object');
       parsed = {};
     }
-    const { schema, uischema, data: formData, style } = extractParts(parsed);
+    const { schema, uischema, data: formData, style, submit } = extractParts(parsed);
     if (!schema || typeof schema !== 'object') {
       vfile.message('jsonform: Schema must be a JSON Schema object');
     }
     const node = {
       type: 'anywidget',
       esm: widgetRef(vfile.path),
-      model: { schema: schema ?? {}, uischema, data: formData },
+      model: { schema: schema ?? {}, uischema, data: formData, submit },
       id: randomUUID(),
     };
     if (typeof style === 'string' && style.trim()) {
