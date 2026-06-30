@@ -17,7 +17,7 @@ import { load as loadYaml } from 'js-yaml';
 // Published location of the browser widget bundle (used when this plugin is
 // loaded from a URL, i.e. there is no local checkout next to it).
 const WIDGET_URL =
-  'https://cdn.jsdelivr.net/gh/flotpython/myst-jsonform@main/dist/widget.mjs';
+  'https://cdn.jsdelivr.net/gh/myst-contrib/myst-jsonform@main/dist/widget.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // Local widget bundle, relative to this file. Present in a checkout (whether

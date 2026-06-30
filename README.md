@@ -11,7 +11,7 @@ Add the plugin to your `myst.yml`:
 ```yaml
 project:
   plugins:
-    - https://cdn.jsdelivr.net/gh/flotpython/myst-jsonform@main/dist/jsonform.mjs
+    - https://cdn.jsdelivr.net/gh/myst-contrib/myst-jsonform@main/dist/jsonform.mjs
 ```
 
 ## The directive body: two modes

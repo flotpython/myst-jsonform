@@ -2220,7 +2220,7 @@ var DEFAULT_DUMP_OPTIONS = {
 };
 
 // src/jsonform.mjs
-var WIDGET_URL = "https://cdn.jsdelivr.net/gh/flotpython/myst-jsonform@main/dist/widget.mjs";
+var WIDGET_URL = "https://cdn.jsdelivr.net/gh/myst-contrib/myst-jsonform@main/dist/widget.mjs";
 var HERE = path.dirname(fileURLToPath(import.meta.url));
 var LOCAL_WIDGET = path.resolve(HERE, "..", "dist", "widget.mjs");
 function widgetRef(vfilePath) {
