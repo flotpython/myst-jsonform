@@ -24087,7 +24087,26 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle, submit }) {
   const [status, setStatus] = React3.useState("idle");
   const [message, setMessage] = React3.useState(null);
   const [printData, setPrintData] = React3.useState(null);
+  const rootRef = React3.useRef(null);
   const actions = React3.useMemo(() => normalizeSubmit(submit), [submit]);
+  function emit(eventName, phase, dataArg, errsArg, identityName) {
+    const node = rootRef.current;
+    if (!node || !eventName) return;
+    const errs = errsArg ?? [];
+    node.dispatchEvent(
+      new CustomEvent(eventName, {
+        bubbles: true,
+        composed: true,
+        detail: {
+          name: identityName,
+          phase,
+          data: dataArg,
+          valid: errs.length === 0,
+          errors: errs
+        }
+      })
+    );
+  }
   const isValid = errors.length === 0;
   const fieldKey = (e) => e.instancePath || (e.params?.missingProperty ? `/${e.params.missingProperty}` : "");
   const invalidCount = new Set(errors.map(fieldKey)).size;
@@ -24098,6 +24117,12 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle, submit }) {
     try {
       let toPrint = null;
       for (const action of actions) {
+        if (action.type === "event") {
+          if (action.submit_event) {
+            emit(action.submit_event, "submit", data, errors, action.name);
+          }
+          continue;
+        }
         const out = await runAction(action, data);
         if (out.type === "print") toPrint = out.data;
       }
@@ -24111,7 +24136,7 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle, submit }) {
   }
   return React3.createElement(
     "div",
-    { className: "myst-jsonform" },
+    { className: "myst-jsonform", ref: rootRef },
     React3.createElement("style", null, STYLE),
     // User CSS goes AFTER the base stylesheet so equal-specificity rules win.
     userStyle && React3.createElement("style", null, userStyle),
@@ -24124,11 +24149,17 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle, submit }) {
       cells: vanillaCells,
       ajv,
       onChange: ({ data: next, errors: errs }) => {
+        const e = errs ?? [];
         setData(next);
-        setErrors(errs ?? []);
+        setErrors(e);
         setStatus("idle");
         setMessage(null);
         setPrintData(null);
+        for (const action of actions) {
+          if (action.type === "event" && action.change_event) {
+            emit(action.change_event, "change", next, e, action.name);
+          }
+        }
       }
     }),
     React3.createElement(
