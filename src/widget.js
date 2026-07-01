@@ -172,10 +172,13 @@ async function runAction(action, data) {
     // CORS preflight; the body is still JSON. Set `json: true` to use the
     // official application/json (which triggers a preflight on the server).
     const contentType = action.json ? 'application/json' : 'text/plain;charset=UTF-8';
+    // Merge any user-supplied headers on top of the default Content-Type (they
+    // can also override it). Non-safelisted headers trigger a CORS preflight.
+    const headers = { 'Content-Type': contentType, ...(action.headers ?? {}) };
     const res = await fetch(action.url, {
       method,
       redirect: 'follow', // follow 3xx
-      headers: { 'Content-Type': contentType },
+      headers,
       body: JSON.stringify(data),
     });
     // res.ok is exactly 200 <= status < 300

@@ -16,7 +16,8 @@ project:
 
 ## The directive body: two modes
 
-The body can be written in **YAML or JSON**, in one of two modes.
+The body can be written in one of two modes (and in each case, using either YAML
+or JSON syntax).
 
 ### Mode 1 — a single Schema
 
@@ -175,16 +176,19 @@ Submit:
 
 Sends the data to an HTTP endpoint with `fetch`.
 
-| key      | default      | meaning |
-|----------|--------------|---------|
-| `url`    | *(required)* | endpoint to send to |
-| `method` | `POST`       | HTTP method |
-| `json`   | `false`      | content-type: `false` → `text/plain` (no CORS preflight), `true` → `application/json` |
+| key       | default      | meaning |
+|-----------|--------------|---------|
+| `url`     | *(required)* | endpoint to send to |
+| `method`  | `POST`       | HTTP method |
+| `json`    | `false`      | content-type: `false` → `text/plain` (no CORS preflight), `true` → `application/json` |
+| `headers` | *(none)*     | extra request headers, merged over the default `Content-Type` |
+
+For example:
 
 ```yaml
 Submit:
   type: webapi
-  url: https://data-collector.example/survey/12/response
+  url: https://my-data-collector.example.org/survey
 ```
 
 - **Success** = the response status is `2xx`. Redirects (`3xx`) are followed.
@@ -194,6 +198,23 @@ Submit:
   to use the official `application/json` content-type, which triggers a preflight
   (the server must then also handle `OPTIONS`). All CORS configuration is on the
   **endpoint's** server, never the page's.
+
+
+**Formspree**  
+You can easily setup a free endpoint with [Formspree](https://formspree.io) or
+similar services.
+
+```yaml
+Submit:
+  type: webapi
+  url: https://formspree.io/f/xxxxxxxx
+  json: true
+  headers:
+    Accept: application/json
+```
+
+Formspree needs `Accept: application/json`, otherwise they
+302-redirect to an HTML "thanks" page with no CORS headers, which fails.
 
 ### `type: event`
 
