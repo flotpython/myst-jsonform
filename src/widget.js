@@ -201,8 +201,31 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle, submit }) {
   const [status, setStatus] = React.useState('idle'); // idle | pending | success | error
   const [message, setMessage] = React.useState(null);
   const [printData, setPrintData] = React.useState(null);
+  const rootRef = React.useRef(null);
 
   const actions = React.useMemo(() => normalizeSubmit(submit), [submit]);
+
+  // Dispatch a CustomEvent on the form's root element. `composed` lets it cross
+  // the shadow-DOM boundary and `bubbles` lets it climb to document/window, so
+  // page code can listen globally: window.addEventListener(name, e => e.detail).
+  function emit(eventName, phase, dataArg, errsArg, identityName) {
+    const node = rootRef.current;
+    if (!node || !eventName) return;
+    const errs = errsArg ?? [];
+    node.dispatchEvent(
+      new CustomEvent(eventName, {
+        bubbles: true,
+        composed: true,
+        detail: {
+          name: identityName,
+          phase,
+          data: dataArg,
+          valid: errs.length === 0,
+          errors: errs,
+        },
+      }),
+    );
+  }
   const isValid = errors.length === 0;
   // One field can raise several errors (e.g. both `pattern` and `format`), so
   // count distinct fields, not raw errors. `required` errors report on the
@@ -220,6 +243,13 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle, submit }) {
       // first failure throws out of the loop).
       let toPrint = null;
       for (const action of actions) {
+        if (action.type === 'event') {
+          // Emitting is fire-and-forget: it always "succeeds".
+          if (action.submit_event) {
+            emit(action.submit_event, 'submit', data, errors, action.name);
+          }
+          continue;
+        }
         const out = await runAction(action, data);
         if (out.type === 'print') toPrint = out.data;
       }
@@ -234,7 +264,7 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle, submit }) {
 
   return React.createElement(
     'div',
-    { className: 'myst-jsonform' },
+    { className: 'myst-jsonform', ref: rootRef },
     React.createElement('style', null, STYLE),
     // User CSS goes AFTER the base stylesheet so equal-specificity rules win.
     userStyle && React.createElement('style', null, userStyle),
@@ -247,12 +277,19 @@ function JsonFormWidget({ schema, uischema, initialData, userStyle, submit }) {
       cells: vanillaCells,
       ajv,
       onChange: ({ data: next, errors: errs }) => {
+        const e = errs ?? [];
         setData(next);
-        setErrors(errs ?? []);
+        setErrors(e);
         // A change invalidates any previous submit outcome.
         setStatus('idle');
         setMessage(null);
         setPrintData(null);
+        // Emit change events (using the fresh values, not state).
+        for (const action of actions) {
+          if (action.type === 'event' && action.change_event) {
+            emit(action.change_event, 'change', next, e, action.name);
+          }
+        }
       },
     }),
     React.createElement(

@@ -195,13 +195,57 @@ Submit:
   (the server must then also handle `OPTIONS`). All CORS configuration is on the
   **endpoint's** server, never the page's.
 
+### `type: event`
+
+Emits DOM `CustomEvent`s so other JavaScript on the page can react to the form.
+
+| key            | default   | meaning |
+|----------------|-----------|---------|
+| `submit_event` | *(none)*  | event name dispatched when the form is submitted |
+| `change_event` | *(none)*  | event name dispatched on every change (keystroke, etc.) |
+| `name`         | *(none)*  | identity, echoed into `event.detail.name` |
+
+```yaml
+Submit:
+  type: event
+  name: survey12
+  submit_event: done
+  change_event: ongoing
+```
+
+The event is dispatched with `bubbles: true, composed: true`, so it crosses the
+shadow-DOM boundary and reaches `document`/`window` — page code listens
+globally, with no handle to the element:
+
+```js
+window.addEventListener('done', (e) => {
+  console.log(e.detail.name, e.detail.data, e.detail.valid);
+});
+window.addEventListener('ongoing', (e) => {
+  console.log('changed:', e.detail.data);
+});
+```
+
+`event.detail` carries `{ name, phase, data, valid, errors }`, where `phase` is
+`'change'` or `'submit'` and `valid` is `errors.length === 0`. `event.target` is
+the form's root element, so a scoped listener with a handle works too.
+
+> Event names are global strings: if you create two forms, you can use the same
+> event names and callback handlers, and you can disambiguate via `detail.name`.  
+> Note that due to JSONForms internals, the `change_event` if defined also fires
+> once on load.
+
 ### A list of actions
+
+Note that a single form can choose to trigger multiple actions on submit, e.g.
 
 ```yaml
 Submit:
   - type: print
   - type: webapi
     url: https://data-collector.example/survey/12/response
+  - type: event
+    submit_event: done
 ```
 
 ## More examples
