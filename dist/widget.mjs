@@ -24062,11 +24062,12 @@ async function runAction(action, data) {
     if (!action.url) throw new Error('webapi: missing "url"');
     const method = action.method ?? "POST";
     const contentType = action.json ? "application/json" : "text/plain;charset=UTF-8";
+    const headers = { "Content-Type": contentType, ...action.headers ?? {} };
     const res = await fetch(action.url, {
       method,
       redirect: "follow",
       // follow 3xx
-      headers: { "Content-Type": contentType },
+      headers,
       body: JSON.stringify(data)
     });
     if (!res.ok) throw new Error(`webapi: ${action.url} \u2192 HTTP ${res.status}`);
